@@ -27,6 +27,7 @@ import co.cask.cdap.templates.etl.api.batch.BatchSource;
 import co.cask.cdap.templates.etl.api.config.ETLStage;
 import co.cask.cdap.templates.etl.batch.config.ETLBatchConfig;
 import co.cask.cdap.templates.etl.batch.sinks.BatchWritableSink;
+import co.cask.cdap.templates.etl.batch.sinks.DBSink;
 import co.cask.cdap.templates.etl.batch.sinks.KVTableSink;
 import co.cask.cdap.templates.etl.batch.sinks.TableSink;
 import co.cask.cdap.templates.etl.batch.sinks.TimePartitionedFileSetDatasetAvroSink;
@@ -90,7 +91,6 @@ public class ETLBatchTemplate extends ApplicationTemplate<ETLBatchConfig> {
                                         TimePartitionedFileSetDatasetAvroSink.class,
                                         StreamToStructuredRecordTransform.class,
                                         GenericTypeToAvroKeyTransform.class,
-                                        DBSource.class,
                                         DBSource.class,
                                         DBRecordToStructuredRecordTransform.class,
                                         StructuredRecordToByteArrayTransform.class));
@@ -257,7 +257,7 @@ public class ETLBatchTemplate extends ApplicationTemplate<ETLBatchConfig> {
 
   @Override
   public void configure() {
-    setName("etlbatch");
+    setName("etlbatch2");
     setDescription("Batch Extract-Transform-Load (ETL) Adapter");
     addMapReduce(new ETLMapReduce());
     addWorkflow(new ETLWorkflow());

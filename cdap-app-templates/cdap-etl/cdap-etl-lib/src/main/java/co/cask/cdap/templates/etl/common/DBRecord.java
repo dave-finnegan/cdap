@@ -18,6 +18,7 @@ package co.cask.cdap.templates.etl.common;
 
 import co.cask.cdap.api.data.format.StructuredRecord;
 import co.cask.cdap.api.data.schema.Schema;
+import co.cask.cdap.api.data.schema.UnsupportedTypeException;
 import com.google.common.collect.Lists;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.lib.db.DBWritable;
@@ -25,10 +26,16 @@ import org.apache.hadoop.mapreduce.lib.db.DBWritable;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.List;
 
 /**
@@ -61,8 +68,8 @@ public class DBRecord implements Writable, DBWritable {
     // ResultSetMetadata columns are numbered starting with 1
     for (int i = 1; i <= metadata.getColumnCount(); i++) {
       String columnName = metadata.getColumnName(i);
-      String columnType = metadata.getColumnClassName(i);
-      Schema.Field field = Schema.Field.of(columnName, Schema.of(getType(columnType)));
+      int columnSqlType = metadata.getColumnType(i);
+      Schema.Field field = Schema.Field.of(columnName, Schema.of(getType(columnSqlType)));
       fields.add(field);
     }
     Schema schema = Schema.recordOf("dbRecord", fields);
@@ -95,24 +102,66 @@ public class DBRecord implements Writable, DBWritable {
     }
   }
 
-  private Schema.Type getType(String columnType) {
-    if (columnType == null) {
-      return Schema.Type.NULL;
-    } else if (String.class.getName().equals(columnType)) {
-      return Schema.Type.STRING;
-    } else if (Boolean.class.getName().equals(columnType)) {
-      return Schema.Type.BOOLEAN;
-    } else if (Integer.class.getName().equals(columnType)) {
-      return Schema.Type.INT;
-    } else if (Long.class.getName().equals(columnType)) {
-      return Schema.Type.LONG;
-    } else if (Float.class.getName().equals(columnType)) {
-      return Schema.Type.FLOAT;
-    } else if (Double.class.getName().equals(columnType)) {
-      return Schema.Type.DOUBLE;
-    } else {
-      throw new IllegalArgumentException("Unsupported datatype: " + columnType);
+  private Schema.Type getType(int sqlType) throws SQLException {
+    // Type.STRING covers sql types - case VARCHAR,CHAR,CLOB,LONGNVARCHAR,LONGVARCHAR,NCHAR,NCLOB,NVARCHAR
+    Schema.Type type = Schema.Type.STRING;
+    switch (sqlType) {
+      case Types.NULL:
+        type = Schema.Type.NULL;
+        break;
+
+      case Types.BOOLEAN:
+      case Types.BIT:
+        type = Schema.Type.BOOLEAN;
+        break;
+
+      case Types.TINYINT:
+      case Types.SMALLINT:
+      case Types.INTEGER:
+        type = Schema.Type.INT;
+        break;
+
+      case Types.BIGINT:
+        type = Schema.Type.LONG;
+        break;
+
+      case Types.REAL:
+      case Types.FLOAT:
+        type = Schema.Type.FLOAT;
+        break;
+
+      case Types.NUMERIC:
+      case Types.DECIMAL:
+      case Types.DOUBLE:
+        type = Schema.Type.DOUBLE;
+        break;
+
+      case Types.DATE:
+      case Types.TIME:
+      case Types.TIMESTAMP:
+        type = Schema.Type.LONG;
+        break;
+
+      case Types.BINARY:
+      case Types.VARBINARY:
+      case Types.LONGVARBINARY:
+      case Types.BLOB:
+        type = Schema.Type.BYTES;
+        break;
+
+      case Types.ARRAY:
+      case Types.DATALINK:
+      case Types.DISTINCT:
+      case Types.JAVA_OBJECT:
+      case Types.OTHER:
+      case Types.REF:
+      case Types.ROWID:
+      case Types.SQLXML:
+      case Types.STRUCT:
+        throw new SQLException(new UnsupportedTypeException("Unsupported SQL Type: " + sqlType));
     }
+
+    return type;
   }
 
   private void writeValue(PreparedStatement stmt, Schema.Type fieldType, Object fieldValue,
@@ -122,25 +171,83 @@ public class DBRecord implements Writable, DBWritable {
         stmt.setNull(fieldIndex, fieldIndex);
         break;
       case STRING:
-        stmt.setString(fieldIndex, (String) fieldValue);
+        // write string appropriately
+        writeString(stmt, fieldIndex, fieldValue);
         break;
       case BOOLEAN:
         stmt.setBoolean(fieldIndex, (Boolean) fieldValue);
         break;
       case INT:
-        stmt.setInt(fieldIndex, (Integer) fieldValue);
+        // write short or int appropriately
+        writeInt(stmt, fieldIndex, fieldValue);
         break;
       case LONG:
-        stmt.setLong(fieldIndex, (Long) fieldValue);
+        // write date, timestamp or long appropriately
+        writeLong(stmt, fieldIndex, fieldValue);
         break;
       case FLOAT:
+        // both real and float are set with the same method on prepared statement
         stmt.setFloat(fieldIndex, (Float) fieldValue);
         break;
       case DOUBLE:
         stmt.setDouble(fieldIndex, (Double) fieldValue);
         break;
+      case BYTES:
+        writeBytes(stmt, fieldIndex, fieldValue);
+        break;
       default:
         throw new SQLException(String.format("Unsupported datatype: %s with value: %s.", fieldType, fieldValue));
+    }
+  }
+
+  private void writeBytes(PreparedStatement stmt, int fieldIndex, Object fieldValue) throws SQLException {
+    switch (stmt.getMetaData().getColumnType(fieldIndex)) {
+      case Types.BLOB:
+        stmt.setBlob(fieldIndex, (Blob) fieldValue);
+        break;
+      default:
+        // handles BINARY, VARBINARY and LOGVARBINARY
+        stmt.setBytes(fieldIndex, (byte []) fieldValue);
+        break;
+    }
+  }
+
+  private void writeInt(PreparedStatement stmt, int fieldIndex, Object fieldValue) throws SQLException {
+    switch (stmt.getMetaData().getColumnType(fieldIndex)) {
+      case Types.TINYINT:
+      case Types.SMALLINT:
+        stmt.setShort(fieldIndex, (Short) fieldValue);
+        break;
+      default:
+        stmt.setInt(fieldIndex, (Integer) fieldValue);
+    }
+  }
+
+  private void writeString(PreparedStatement stmt, int fieldIndex, Object fieldValue) throws SQLException {
+    switch (stmt.getMetaData().getColumnType(fieldIndex)) {
+      case Types.CLOB:
+        stmt.setClob(fieldIndex, (Clob) fieldValue);
+        break;
+      default:
+        stmt.setString(fieldIndex, (String) fieldValue);
+        break;
+    }
+  }
+
+  private void writeLong(PreparedStatement stmt, int fieldIndex, Object fieldValue) throws SQLException {
+    switch (stmt.getMetaData().getColumnType(fieldIndex)) {
+      case Types.DATE:
+        stmt.setDate(fieldIndex, (Date) fieldValue);
+        break;
+      case Types.TIME:
+        stmt.setTime(fieldIndex, (Time) fieldValue);
+        break;
+      case Types.TIMESTAMP:
+        stmt.setTimestamp(fieldIndex, (Timestamp) fieldValue);
+        break;
+      default:
+        stmt.setLong(fieldIndex, (Long) fieldValue);
+        break;
     }
   }
 }

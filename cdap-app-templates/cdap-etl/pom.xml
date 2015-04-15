@@ -197,6 +197,7 @@
         <groupId>org.hsqldb</groupId>
         <artifactId>hsqldb</artifactId>
         <version>${hsqldb.version}</version>
+        <scope>test</scope>
       </dependency>
 
       <!-- TODO: Remove when plugin management is added -->

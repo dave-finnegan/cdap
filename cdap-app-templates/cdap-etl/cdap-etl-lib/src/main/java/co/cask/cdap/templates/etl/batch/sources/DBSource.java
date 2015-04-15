@@ -23,14 +23,15 @@ import co.cask.cdap.templates.etl.api.batch.BatchSource;
 import co.cask.cdap.templates.etl.api.batch.BatchSourceContext;
 import co.cask.cdap.templates.etl.api.config.ETLStage;
 import co.cask.cdap.templates.etl.common.DBRecord;
+import co.cask.cdap.templates.etl.common.ETLDBInputFormat;
 import co.cask.cdap.templates.etl.common.Properties;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.mysql.jdbc.Driver;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.db.DBConfiguration;
-import org.apache.hadoop.mapreduce.lib.db.DBInputFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,8 @@ import java.util.Map;
  */
 public class DBSource extends BatchSource<LongWritable, DBRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(DBSource.class);
+
+  Driver driver;
 
   @Override
   public void configure(StageConfigurer configurer) {
@@ -86,9 +89,10 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
 
     Job job = context.getHadoopJob();
     Configuration conf = job.getConfiguration();
-    job.setInputFormatClass(DBInputFormat.class);
+    job.setInputFormatClass(ETLDBInputFormat.class);
     DBConfiguration.configureDB(conf, dbDriverClass, dbConnectionString);
-    DBInputFormat.setInput(job, DBRecord.class, String.format("SELECT %s FROM %s", dbColumns, dbTableName),
-                           String.format("SELECT COUNT(%s) from %s", countQueryColumn, dbTableName));
+    ETLDBInputFormat.setInput(job, DBRecord.class, String.format("SELECT %s FROM %s", dbColumns, dbTableName),
+                              String.format("SELECT COUNT(%s) from %s", countQueryColumn, dbTableName));
+    job.setInputFormatClass(ETLDBInputFormat.class);
   }
 }

@@ -20,6 +20,7 @@ import co.cask.cdap.api.data.format.StructuredRecord;
 import co.cask.cdap.api.data.schema.Schema;
 import co.cask.cdap.templates.etl.api.Emitter;
 import co.cask.cdap.templates.etl.api.Transform;
+import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import org.apache.hadoop.io.LongWritable;
@@ -45,7 +46,8 @@ public class StructuredRecordToByteArrayTransform extends Transform<LongWritable
       LOG.debug("Found null input key. Ignoring.");
       return;
     }
-    emitter.emit(String.valueOf(inputKey.get()).getBytes(), GSON.toJson(getData(structuredRecord)).getBytes());
+    emitter.emit(String.valueOf(inputKey.get()).getBytes(),
+                 GSON.toJson(getData(structuredRecord)).getBytes(Charsets.UTF_8));
   }
 
   private Map<String, Object> getData(StructuredRecord structuredRecord) {

@@ -32,6 +32,7 @@ import co.cask.cdap.test.DataSetManager;
 import co.cask.cdap.test.MapReduceManager;
 import co.cask.cdap.test.SlowTests;
 import co.cask.cdap.test.TestBase;
+import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -45,13 +46,18 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +67,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class ETLDBMapreduceTest extends TestBase {
   private static final Gson GSON = new Gson();
+  private static final long currentTs = System.currentTimeMillis();
+
   private static Connection conn;
   private static Statement stmt;
 
@@ -81,22 +89,65 @@ public class ETLDBMapreduceTest extends TestBase {
                    "name VARCHAR(40), " +
                    "score DOUBLE, " +
                    "graduated BOOLEAN, " +
-                   "not_imported BIGINT" +
+                   "not_imported VARCHAR(30), " +
+                   "tiny TINYINT, " +
+                   "small SMALLINT, " +
+                   "big BIGINT, " +
+                   "float FLOAT, " +
+                   "real REAL, " +
+                   "numeric NUMERIC, " +
+                   "decimal DECIMAL, " +
+                   "bit BIT, " +
+                   "date DATE, " +
+                   "time TIME, " +
+                   "timestamp TIMESTAMP, " +
+                   "binary BINARY(100)," +
+                   "blob BLOB(100), " +
+                   "clob CLOB" +
                    ")");
 
-    PreparedStatement pStmt1 = conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?)");
+    PreparedStatement pStmt1 =
+      conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     pStmt1.setInt(1, 1);
     pStmt1.setString(2, "bob");
     pStmt1.setDouble(3, 3.3);
     pStmt1.setBoolean(4, false);
-    pStmt1.setLong(5, 3L);
+    pStmt1.setString(5, "random");
+    pStmt1.setShort(6, (short) 1);
+    pStmt1.setShort(7, (short) 2);
+    pStmt1.setLong(8, 8L);
+    pStmt1.setFloat(9, 9f);
+    pStmt1.setFloat(10, 4f);
+    pStmt1.setDouble(11, 9);
+    pStmt1.setDouble(12, 8);
+    pStmt1.setInt(13, 1);
+    pStmt1.setDate(14, new Date(currentTs));
+    pStmt1.setTime(15, new Time(currentTs));
+    pStmt1.setTimestamp(16, new Timestamp(currentTs));
+    pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
+    pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
+    pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
     pStmt1.executeUpdate();
 
     pStmt1.setInt(1, 2);
     pStmt1.setString(2, "alice");
     pStmt1.setDouble(3, 3.9);
     pStmt1.setBoolean(4, true);
-    pStmt1.setLong(5, 4L);
+    pStmt1.setString(5, "random");
+    pStmt1.setShort(6, (short) 3);
+    pStmt1.setShort(7, (short) 4);
+    pStmt1.setLong(8, 0L);
+    pStmt1.setFloat(9, 8f);
+    pStmt1.setFloat(10, 4f);
+    pStmt1.setDouble(11, 12);
+    pStmt1.setDouble(12, 8);
+    pStmt1.setBoolean(13, false);
+    pStmt1.setDate(14, new Date(currentTs));
+    pStmt1.setTime(15, new Time(currentTs));
+    pStmt1.setTimestamp(16, new Timestamp(currentTs));
+    pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
+    pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
+    pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
     pStmt1.executeUpdate();
   }
 
@@ -112,7 +163,9 @@ public class ETLDBMapreduceTest extends TestBase {
                                    ImmutableMap.of(Properties.DB.DRIVER_CLASS, "org.hsqldb.jdbcDriver",
                                                    Properties.DB.CONNECTION_STRING, hsqlConnectionString,
                                                    Properties.DB.TABLE_NAME, "my_table",
-                                                   Properties.DB.COLUMNS, "id, name, score, graduated"
+                                                   Properties.DB.COLUMNS,
+                                                   "id, name, score, graduated, tiny, small, big, float, real, " +
+                                                     "numeric, decimal, bit, binary, date, time, timestamp"
                                    ));
     ETLStage sink = new ETLStage("KVTableSink", ImmutableMap.of("name", "table1"));
     ETLStage structuredRecordTransform = new ETLStage(DBRecordToStructuredRecordTransform.class.getSimpleName(),
@@ -151,6 +204,32 @@ public class ETLDBMapreduceTest extends TestBase {
     Assert.assertEquals(true, secondRecord.get("GRADUATED"));
     Assert.assertFalse(firstRecord.containsKey("NOT_IMPORTED"));
     Assert.assertFalse(secondRecord.containsKey("NOT_IMPORTED"));
+    Assert.assertEquals(1.0, firstRecord.get("TINY"));
+    Assert.assertEquals(3.0, secondRecord.get("TINY"));
+    Assert.assertEquals(2.0, firstRecord.get("SMALL"));
+    Assert.assertEquals(4.0, secondRecord.get("SMALL"));
+    Assert.assertEquals(8.0, firstRecord.get("BIG"));
+    Assert.assertEquals(0.0, secondRecord.get("BIG"));
+    Assert.assertEquals(9.0, firstRecord.get("FLOAT"));
+    Assert.assertEquals(8.0, secondRecord.get("FLOAT"));
+    Assert.assertEquals(4.0, firstRecord.get("REAL"));
+    Assert.assertEquals(4.0, secondRecord.get("REAL"));
+    Assert.assertEquals(9.0, firstRecord.get("NUMERIC"));
+    Assert.assertEquals(12.0, secondRecord.get("NUMERIC"));
+    Assert.assertEquals(8.0, firstRecord.get("DECIMAL"));
+    Assert.assertEquals(8.0, secondRecord.get("DECIMAL"));
+    Assert.assertEquals(true, firstRecord.get("BIT"));
+    Assert.assertEquals(false, secondRecord.get("BIT"));
+    Assert.assertTrue(firstRecord.containsKey("BINARY"));
+    Assert.assertTrue(secondRecord.containsKey("BINARY"));
+    Assert.assertTrue(firstRecord.containsKey("DATE"));
+    Assert.assertTrue(secondRecord.containsKey("DATE"));
+    Assert.assertTrue(firstRecord.containsKey("TIME"));
+    Assert.assertTrue(secondRecord.containsKey("TIME"));
+    Assert.assertTrue(firstRecord.containsKey("TIMESTAMP"));
+    Assert.assertTrue(secondRecord.containsKey("TIMESTAMP"));
+//    Assert.assertTrue(firstRecord.containsKey("BLOB"));
+//    Assert.assertTrue(secondRecord.containsKey("BLOB"));
     scanner.close();
   }
 
