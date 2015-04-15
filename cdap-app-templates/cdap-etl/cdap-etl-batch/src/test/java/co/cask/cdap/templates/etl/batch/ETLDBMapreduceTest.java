@@ -33,12 +33,16 @@ import co.cask.cdap.test.MapReduceManager;
 import co.cask.cdap.test.SlowTests;
 import co.cask.cdap.test.TestBase;
 import com.google.common.base.Charsets;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import org.hsqldb.Server;
+import org.hsqldb.persist.HsqlProperties;
+import org.hsqldb.server.ServerAcl;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -72,97 +76,101 @@ public class ETLDBMapreduceTest extends TestBase {
   private static final Gson GSON = new Gson();
   private static final long currentTs = System.currentTimeMillis();
 
-  private static Connection conn;
-  private static Statement stmt;
-
   @ClassRule
   public static TemporaryFolder temporaryFolder = new TemporaryFolder();
-
-  private static String hsqlConnectionString;
+  private static HSQLDBServer hsqlDBServer;
 
   @BeforeClass
-  public static void setup() throws SQLException, IOException {
+  public static void setup() throws Exception {
     String hsqlDBDir = temporaryFolder.newFolder("hsqldb").getAbsolutePath();
-    hsqlConnectionString = String.format("jdbc:hsqldb:%s/testdb", hsqlDBDir);
-    conn = DriverManager.getConnection(String.format("%s;create=true", hsqlConnectionString));
+    hsqlDBServer = new HSQLDBServer(hsqlDBDir, "testdb");
+    hsqlDBServer.start();
+    Connection conn = hsqlDBServer.getConnection();
     try {
-      stmt = conn.createStatement();
-      try {
-        stmt.execute("CREATE TABLE my_table" +
-                       "(" +
-                       "id INT, " +
-                       "name VARCHAR(40), " +
-                       "score DOUBLE, " +
-                       "graduated BOOLEAN, " +
-                       "not_imported VARCHAR(30), " +
-                       "tiny TINYINT, " +
-                       "small SMALLINT, " +
-                       "big BIGINT, " +
-                       "float FLOAT, " +
-                       "real REAL, " +
-                       "numeric NUMERIC, " +
-                       "decimal DECIMAL, " +
-                       "bit BIT, " +
-                       "date DATE, " +
-                       "time TIME, " +
-                       "timestamp TIMESTAMP, " +
-                       "binary BINARY(100)," +
-                       "blob BLOB(100), " +
-                       "clob CLOB" +
-                       ")");
-      } finally {
-        stmt.close();
-      }
-
-      PreparedStatement pStmt1 =
-        conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      try {
-        pStmt1.setInt(1, 1);
-        pStmt1.setString(2, "bob");
-        pStmt1.setDouble(3, 3.3);
-        pStmt1.setBoolean(4, false);
-        pStmt1.setString(5, "random");
-        pStmt1.setShort(6, (short) 1);
-        pStmt1.setShort(7, (short) 2);
-        pStmt1.setLong(8, 8L);
-        pStmt1.setFloat(9, 9f);
-        pStmt1.setFloat(10, 4f);
-        pStmt1.setDouble(11, 9);
-        pStmt1.setDouble(12, 8);
-        pStmt1.setInt(13, 1);
-        pStmt1.setDate(14, new Date(currentTs));
-        pStmt1.setTime(15, new Time(currentTs));
-        pStmt1.setTimestamp(16, new Timestamp(currentTs));
-        pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
-        pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
-        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
-        pStmt1.executeUpdate();
-
-        pStmt1.setInt(1, 2);
-        pStmt1.setString(2, "alice");
-        pStmt1.setDouble(3, 3.9);
-        pStmt1.setBoolean(4, true);
-        pStmt1.setString(5, "random");
-        pStmt1.setShort(6, (short) 3);
-        pStmt1.setShort(7, (short) 4);
-        pStmt1.setLong(8, 0L);
-        pStmt1.setFloat(9, 8f);
-        pStmt1.setFloat(10, 4f);
-        pStmt1.setDouble(11, 12);
-        pStmt1.setDouble(12, 8);
-        pStmt1.setBoolean(13, false);
-        pStmt1.setDate(14, new Date(currentTs));
-        pStmt1.setTime(15, new Time(currentTs));
-        pStmt1.setTimestamp(16, new Timestamp(currentTs));
-        pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
-        pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
-        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
-        pStmt1.executeUpdate();
-      } finally {
-        pStmt1.close();
-      }
+      createTestTable(conn);
+      prepareTestData(conn);
     } finally {
       conn.close();
+    }
+  }
+
+  private static void createTestTable(Connection conn) throws SQLException {
+    Statement stmt = conn.createStatement();
+    try {
+      stmt.execute("CREATE TABLE my_table" +
+                     "(" +
+                     "id INT, " +
+                     "name VARCHAR(40), " +
+                     "score DOUBLE, " +
+                     "graduated BOOLEAN, " +
+                     "not_imported VARCHAR(30), " +
+                     "tiny TINYINT, " +
+                     "small SMALLINT, " +
+                     "big BIGINT, " +
+                     "float FLOAT, " +
+                     "real REAL, " +
+                     "numeric NUMERIC, " +
+                     "decimal DECIMAL, " +
+                     "bit BIT, " +
+                     "date DATE, " +
+                     "time TIME, " +
+                     "timestamp TIMESTAMP, " +
+                     "binary BINARY(100)," +
+                     "blob BLOB(100), " +
+                     "clob CLOB" +
+                     ")");
+    } finally {
+      stmt.close();
+    }
+  }
+
+  private static void prepareTestData(Connection conn) throws SQLException {
+    PreparedStatement pStmt1 =
+      conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    try {
+      pStmt1.setInt(1, 1);
+      pStmt1.setString(2, "bob");
+      pStmt1.setDouble(3, 3.3);
+      pStmt1.setBoolean(4, false);
+      pStmt1.setString(5, "random");
+      pStmt1.setShort(6, (short) 1);
+      pStmt1.setShort(7, (short) 2);
+      pStmt1.setLong(8, 8L);
+      pStmt1.setFloat(9, 9f);
+      pStmt1.setFloat(10, 4f);
+      pStmt1.setDouble(11, 9);
+      pStmt1.setDouble(12, 8);
+      pStmt1.setInt(13, 1);
+      pStmt1.setDate(14, new Date(currentTs));
+      pStmt1.setTime(15, new Time(currentTs));
+      pStmt1.setTimestamp(16, new Timestamp(currentTs));
+      pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
+      pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
+      pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
+      pStmt1.executeUpdate();
+
+      pStmt1.setInt(1, 2);
+      pStmt1.setString(2, "alice");
+      pStmt1.setDouble(3, 3.9);
+      pStmt1.setBoolean(4, true);
+      pStmt1.setString(5, "random");
+      pStmt1.setShort(6, (short) 3);
+      pStmt1.setShort(7, (short) 4);
+      pStmt1.setLong(8, 0L);
+      pStmt1.setFloat(9, 8f);
+      pStmt1.setFloat(10, 4f);
+      pStmt1.setDouble(11, 12);
+      pStmt1.setDouble(12, 8);
+      pStmt1.setBoolean(13, false);
+      pStmt1.setDate(14, new Date(currentTs));
+      pStmt1.setTime(15, new Time(currentTs));
+      pStmt1.setTimestamp(16, new Timestamp(currentTs));
+      pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
+      pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
+      pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
+      pStmt1.executeUpdate();
+    } finally {
+      pStmt1.close();
     }
   }
 
@@ -178,8 +186,8 @@ public class ETLDBMapreduceTest extends TestBase {
 
     ApplicationTemplate<ETLBatchConfig> appTemplate = new ETLBatchTemplate();
     ETLStage source = new ETLStage(DBSource.class.getSimpleName(),
-                                   ImmutableMap.of(Properties.DB.DRIVER_CLASS, "org.hsqldb.jdbcDriver",
-                                                   Properties.DB.CONNECTION_STRING, hsqlConnectionString,
+                                   ImmutableMap.of(Properties.DB.DRIVER_CLASS, hsqlDBServer.getHsqlDBDriver(),
+                                                   Properties.DB.CONNECTION_STRING, hsqlDBServer.getConnectionUrl(),
                                                    Properties.DB.TABLE_NAME, "my_table",
                                                    Properties.DB.COLUMNS,
                                                    "id, name, score, graduated, tiny, small, big, float, real, " +
@@ -246,15 +254,69 @@ public class ETLDBMapreduceTest extends TestBase {
     Assert.assertTrue(secondRecord.containsKey("TIME"));
     Assert.assertTrue(firstRecord.containsKey("TIMESTAMP"));
     Assert.assertTrue(secondRecord.containsKey("TIMESTAMP"));
-//    Assert.assertTrue(firstRecord.containsKey("BLOB"));
-//    Assert.assertTrue(secondRecord.containsKey("BLOB"));
     scanner.close();
   }
 
   @AfterClass
   public static void tearDown() throws SQLException {
-    stmt.execute("DROP TABLE my_table");
-    stmt.close();
-    conn.close();
+    Connection conn = hsqlDBServer.getConnection();
+    try {
+      Statement stmt = conn.createStatement();
+      try {
+        stmt.execute("DROP TABLE my_table");
+      } finally {
+        stmt.close();
+      }
+      stmt.close();
+    } finally {
+      conn.close();
+    }
+
+    hsqlDBServer.stop();
+  }
+
+  private static class HSQLDBServer {
+
+    private final String locationUrl;
+    private final String database;
+    private final String connectionUrl;
+    private final Server server;
+    private final String hsqlDBDriver = "org.hsqldb.jdbcDriver";
+
+    HSQLDBServer(String location, String database) {
+      this.locationUrl = String.format("%s/%s", location, database);
+      this.database = database;
+      this.connectionUrl = String.format("jdbc:hsqldb:hsql://localhost/%s", database);
+      this.server = new Server();
+    }
+
+    public int start() throws IOException, ServerAcl.AclFormatException {
+      HsqlProperties props = new HsqlProperties();
+      props.setProperty("server.database.0", locationUrl);
+      props.setProperty("server.dbname.0", database);
+      server.setProperties(props);
+      return server.start();
+    }
+
+    public int stop() {
+      return server.stop();
+    }
+
+    public Connection getConnection() {
+      try {
+        Class.forName(hsqlDBDriver);
+        return DriverManager.getConnection(connectionUrl);
+      } catch (Exception e) {
+        throw Throwables.propagate(e);
+      }
+    }
+
+    public String getConnectionUrl() {
+      return this.connectionUrl;
+    }
+
+    public String getHsqlDBDriver() {
+      return this.hsqlDBDriver;
+    }
   }
 }
