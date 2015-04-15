@@ -36,6 +36,7 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.junit.AfterClass;
@@ -47,9 +48,11 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.net.URI;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -156,7 +159,10 @@ public class ETLDBMapreduceTest extends TestBase {
   public void testDBSource() throws Exception {
     addDatasetInstance("keyValueTable", "table1").create();
 
-    ApplicationManager applicationManager = deployApplication(ETLBatchTemplate.class);
+    String path = Resources.getResource("org/hsqldb/jdbcDriver.class").getPath();
+    File hsqldbJar = new File(URI.create(path.substring(0, path.indexOf('!'))));
+
+    ApplicationManager applicationManager = deployApplication(ETLBatchTemplate.class, hsqldbJar);
 
     ApplicationTemplate<ETLBatchConfig> appTemplate = new ETLBatchTemplate();
     ETLStage source = new ETLStage(DBSource.class.getSimpleName(),
