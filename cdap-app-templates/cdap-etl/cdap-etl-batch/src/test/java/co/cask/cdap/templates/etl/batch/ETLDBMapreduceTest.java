@@ -85,73 +85,85 @@ public class ETLDBMapreduceTest extends TestBase {
     String hsqlDBDir = temporaryFolder.newFolder("hsqldb").getAbsolutePath();
     hsqlConnectionString = String.format("jdbc:hsqldb:%s/testdb", hsqlDBDir);
     conn = DriverManager.getConnection(String.format("%s;create=true", hsqlConnectionString));
-    stmt = conn.createStatement();
-    stmt.execute("CREATE TABLE my_table" +
-                   "(" +
-                   "id INT, " +
-                   "name VARCHAR(40), " +
-                   "score DOUBLE, " +
-                   "graduated BOOLEAN, " +
-                   "not_imported VARCHAR(30), " +
-                   "tiny TINYINT, " +
-                   "small SMALLINT, " +
-                   "big BIGINT, " +
-                   "float FLOAT, " +
-                   "real REAL, " +
-                   "numeric NUMERIC, " +
-                   "decimal DECIMAL, " +
-                   "bit BIT, " +
-                   "date DATE, " +
-                   "time TIME, " +
-                   "timestamp TIMESTAMP, " +
-                   "binary BINARY(100)," +
-                   "blob BLOB(100), " +
-                   "clob CLOB" +
-                   ")");
+    try {
+      stmt = conn.createStatement();
+      try {
+        stmt.execute("CREATE TABLE my_table" +
+                       "(" +
+                       "id INT, " +
+                       "name VARCHAR(40), " +
+                       "score DOUBLE, " +
+                       "graduated BOOLEAN, " +
+                       "not_imported VARCHAR(30), " +
+                       "tiny TINYINT, " +
+                       "small SMALLINT, " +
+                       "big BIGINT, " +
+                       "float FLOAT, " +
+                       "real REAL, " +
+                       "numeric NUMERIC, " +
+                       "decimal DECIMAL, " +
+                       "bit BIT, " +
+                       "date DATE, " +
+                       "time TIME, " +
+                       "timestamp TIMESTAMP, " +
+                       "binary BINARY(100)," +
+                       "blob BLOB(100), " +
+                       "clob CLOB" +
+                       ")");
+      } finally {
+        stmt.close();
+      }
 
-    PreparedStatement pStmt1 =
-      conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    pStmt1.setInt(1, 1);
-    pStmt1.setString(2, "bob");
-    pStmt1.setDouble(3, 3.3);
-    pStmt1.setBoolean(4, false);
-    pStmt1.setString(5, "random");
-    pStmt1.setShort(6, (short) 1);
-    pStmt1.setShort(7, (short) 2);
-    pStmt1.setLong(8, 8L);
-    pStmt1.setFloat(9, 9f);
-    pStmt1.setFloat(10, 4f);
-    pStmt1.setDouble(11, 9);
-    pStmt1.setDouble(12, 8);
-    pStmt1.setInt(13, 1);
-    pStmt1.setDate(14, new Date(currentTs));
-    pStmt1.setTime(15, new Time(currentTs));
-    pStmt1.setTimestamp(16, new Timestamp(currentTs));
-    pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
-    pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
-    pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
-    pStmt1.executeUpdate();
+      PreparedStatement pStmt1 =
+        conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      try {
+        pStmt1.setInt(1, 1);
+        pStmt1.setString(2, "bob");
+        pStmt1.setDouble(3, 3.3);
+        pStmt1.setBoolean(4, false);
+        pStmt1.setString(5, "random");
+        pStmt1.setShort(6, (short) 1);
+        pStmt1.setShort(7, (short) 2);
+        pStmt1.setLong(8, 8L);
+        pStmt1.setFloat(9, 9f);
+        pStmt1.setFloat(10, 4f);
+        pStmt1.setDouble(11, 9);
+        pStmt1.setDouble(12, 8);
+        pStmt1.setInt(13, 1);
+        pStmt1.setDate(14, new Date(currentTs));
+        pStmt1.setTime(15, new Time(currentTs));
+        pStmt1.setTimestamp(16, new Timestamp(currentTs));
+        pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
+        pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
+        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
+        pStmt1.executeUpdate();
 
-    pStmt1.setInt(1, 2);
-    pStmt1.setString(2, "alice");
-    pStmt1.setDouble(3, 3.9);
-    pStmt1.setBoolean(4, true);
-    pStmt1.setString(5, "random");
-    pStmt1.setShort(6, (short) 3);
-    pStmt1.setShort(7, (short) 4);
-    pStmt1.setLong(8, 0L);
-    pStmt1.setFloat(9, 8f);
-    pStmt1.setFloat(10, 4f);
-    pStmt1.setDouble(11, 12);
-    pStmt1.setDouble(12, 8);
-    pStmt1.setBoolean(13, false);
-    pStmt1.setDate(14, new Date(currentTs));
-    pStmt1.setTime(15, new Time(currentTs));
-    pStmt1.setTimestamp(16, new Timestamp(currentTs));
-    pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
-    pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
-    pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
-    pStmt1.executeUpdate();
+        pStmt1.setInt(1, 2);
+        pStmt1.setString(2, "alice");
+        pStmt1.setDouble(3, 3.9);
+        pStmt1.setBoolean(4, true);
+        pStmt1.setString(5, "random");
+        pStmt1.setShort(6, (short) 3);
+        pStmt1.setShort(7, (short) 4);
+        pStmt1.setLong(8, 0L);
+        pStmt1.setFloat(9, 8f);
+        pStmt1.setFloat(10, 4f);
+        pStmt1.setDouble(11, 12);
+        pStmt1.setDouble(12, 8);
+        pStmt1.setBoolean(13, false);
+        pStmt1.setDate(14, new Date(currentTs));
+        pStmt1.setTime(15, new Time(currentTs));
+        pStmt1.setTimestamp(16, new Timestamp(currentTs));
+        pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
+        pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
+        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
+        pStmt1.executeUpdate();
+      } finally {
+        pStmt1.close();
+      }
+    } finally {
+      conn.close();
+    }
   }
 
   @Test
