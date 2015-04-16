@@ -43,6 +43,7 @@ import java.util.Map;
 public class DBSource extends BatchSource<LongWritable, DBRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(DBSource.class);
 
+  // TODO: Remove when plugin support is enabled
   Driver driver;
 
   @Override
@@ -51,6 +52,18 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     configurer.addProperty(new Property(Properties.DB.DRIVER_CLASS, "Driver class to connect to the database", true));
     configurer.addProperty(
       new Property(Properties.DB.CONNECTION_STRING, "JDBC connection string including database name", true));
+    configurer.addProperty(
+      new Property(Properties.DB.USER,
+                   "User to use to connect to the specified database. " +
+                     "Required for databases that require authentication. " +
+                     "Optional for databases that do not require authentication.",
+                   false));
+    configurer.addProperty(
+      new Property(Properties.DB.PASSWORD,
+                   "Password to be use to connect to the specified database. " +
+                     "Required for databases that require authentication. " +
+                     "Optional for databases that do not require authentication.",
+                   false));
     configurer.addProperty(new Property(Properties.DB.TABLE_NAME, "Table name to import", true));
     configurer.addProperty(
       new Property(Properties.DB.IMPORT_QUERY,
@@ -74,6 +87,8 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     Map<String, String> properties = stageConfig.getProperties();
     String dbDriverClass = properties.get(Properties.DB.DRIVER_CLASS);
     String dbConnectionString = properties.get(Properties.DB.CONNECTION_STRING);
+    String dbUser = properties.get(Properties.DB.USER);
+    String dbPassword = properties.get(Properties.DB.PASSWORD);
     String dbTableName = properties.get(Properties.DB.TABLE_NAME);
     String dbImportQuery = properties.get(Properties.DB.IMPORT_QUERY);
     String dbCountQuery = properties.get(Properties.DB.COUNT_QUERY);
@@ -82,6 +97,12 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbTableName), "dbTableName cannot be null");
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbImportQuery), "dbImportQuery cannot be null");
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbCountQuery), "dbCountQuery cannot be null");
+    Preconditions.checkArgument(!(dbUser == null && dbPassword != null),
+                                "dbUser is null. Please provide both user name and password if database requires " +
+                                  "authentication. If not, please remove dbPassword and retry.");
+    Preconditions.checkArgument(!(dbUser != null && dbPassword == null),
+                                "dbPassword is null. Please provide both user name and password if database requires" +
+                                  "authentication. If not, please remove dbUser and retry.");
   }
 
   @Override
@@ -89,6 +110,8 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     Map<String, String> runtimeArguments = context.getRuntimeArguments();
     String dbDriverClass = runtimeArguments.get(Properties.DB.DRIVER_CLASS);
     String dbConnectionString = runtimeArguments.get(Properties.DB.CONNECTION_STRING);
+    String dbUser = runtimeArguments.get(Properties.DB.USER);
+    String dbPassword = runtimeArguments.get(Properties.DB.PASSWORD);
     String dbTableName = runtimeArguments.get(Properties.DB.TABLE_NAME);
     String dbImportQuery = runtimeArguments.get(Properties.DB.IMPORT_QUERY);
     String dbCountQuery = runtimeArguments.get(Properties.DB.COUNT_QUERY);
@@ -99,7 +122,11 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     Job job = context.getHadoopJob();
     Configuration conf = job.getConfiguration();
     job.setInputFormatClass(ETLDBInputFormat.class);
-    DBConfiguration.configureDB(conf, dbDriverClass, dbConnectionString);
+    if (dbUser == null && dbPassword == null) {
+      DBConfiguration.configureDB(conf, dbDriverClass, dbConnectionString);
+    } else {
+      DBConfiguration.configureDB(conf, dbDriverClass, dbConnectionString, dbUser, dbPassword);
+    }
     ETLDBInputFormat.setInput(job, DBRecord.class, dbImportQuery, dbCountQuery);
     job.setInputFormatClass(ETLDBInputFormat.class);
   }

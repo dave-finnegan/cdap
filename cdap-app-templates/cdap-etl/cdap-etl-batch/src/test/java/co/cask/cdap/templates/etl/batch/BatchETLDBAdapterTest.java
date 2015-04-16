@@ -65,6 +65,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -72,7 +73,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Test for ETL using databases
  */
-public class ETLDBMapreduceTest extends TestBase {
+public class BatchETLDBAdapterTest extends TestBase {
   private static final Gson GSON = new Gson();
   private static final long currentTs = System.currentTimeMillis();
 
@@ -99,8 +100,8 @@ public class ETLDBMapreduceTest extends TestBase {
     try {
       stmt.execute("CREATE TABLE my_table" +
                      "(" +
-                     "id INT, " +
-                     "name VARCHAR(40), " +
+                     "id INT NOT NULL, " +
+                     "name VARCHAR(40) NOT NULL, " +
                      "score DOUBLE, " +
                      "graduated BOOLEAN, " +
                      "not_imported VARCHAR(30), " +
@@ -125,34 +126,38 @@ public class ETLDBMapreduceTest extends TestBase {
   }
 
   private static void prepareTestData(Connection conn) throws SQLException {
-    PreparedStatement pStmt1 =
+    PreparedStatement pStmt =
       conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
-      for (int i = 1; i <= 3; i++) {
+      for (int i = 1; i <= 5; i++) {
         String name = "user" + i;
-        pStmt1.setInt(1, i);
-        pStmt1.setString(2, name);
-        pStmt1.setDouble(3, i);
-        pStmt1.setBoolean(4, (i % 2 == 0));
-        pStmt1.setString(5, "random" + i);
-        pStmt1.setShort(6, (short) i);
-        pStmt1.setShort(7, (short) i);
-        pStmt1.setLong(8, (long) i);
-        pStmt1.setFloat(9, (float) i);
-        pStmt1.setFloat(10, (float) i);
-        pStmt1.setDouble(11, i);
-        pStmt1.setDouble(12, i);
-        pStmt1.setBoolean(13, (i % 2 == 1));
-        pStmt1.setDate(14, new Date(currentTs));
-        pStmt1.setTime(15, new Time(currentTs));
-        pStmt1.setTimestamp(16, new Timestamp(currentTs));
-        pStmt1.setBytes(17, name.getBytes(Charsets.UTF_8));
-        pStmt1.setBlob(18, new ByteArrayInputStream(name.getBytes(Charsets.UTF_8)));
-        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream(name.getBytes(Charsets.UTF_8))));
-        pStmt1.executeUpdate();
+        pStmt.setInt(1, i);
+        pStmt.setString(2, name);
+        pStmt.setDouble(3, i);
+        pStmt.setBoolean(4, (i % 2 == 0));
+        pStmt.setString(5, "random" + i);
+        pStmt.setShort(6, (short) i);
+        pStmt.setShort(7, (short) i);
+        pStmt.setLong(8, (long) i);
+        pStmt.setFloat(9, (float) i);
+        pStmt.setFloat(10, (float) i);
+        pStmt.setDouble(11, i);
+        if ((i % 2 == 0)) {
+          pStmt.setNull(12, Types.DOUBLE);
+        } else {
+          pStmt.setDouble(12, i);
+        }
+        pStmt.setBoolean(13, (i % 2 == 1));
+        pStmt.setDate(14, new Date(currentTs));
+        pStmt.setTime(15, new Time(currentTs));
+        pStmt.setTimestamp(16, new Timestamp(currentTs));
+        pStmt.setBytes(17, name.getBytes(Charsets.UTF_8));
+        pStmt.setBlob(18, new ByteArrayInputStream(name.getBytes(Charsets.UTF_8)));
+        pStmt.setClob(19, new InputStreamReader(new ByteArrayInputStream(name.getBytes(Charsets.UTF_8))));
+        pStmt.executeUpdate();
       }
     } finally {
-      pStmt1.close();
+      pStmt.close();
     }
   }
 
@@ -228,7 +233,7 @@ public class ETLDBMapreduceTest extends TestBase {
     Assert.assertEquals(1.0, firstRecord.get("NUMERIC"));
     Assert.assertEquals(2.0, secondRecord.get("NUMERIC"));
     Assert.assertEquals(1.0, firstRecord.get("DECIMAL"));
-    Assert.assertEquals(2.0, secondRecord.get("DECIMAL"));
+    Assert.assertEquals(null, secondRecord.get("DECIMAL"));
     Assert.assertEquals(true, firstRecord.get("BIT"));
     Assert.assertEquals(false, secondRecord.get("BIT"));
     Assert.assertTrue(firstRecord.containsKey("BINARY"));

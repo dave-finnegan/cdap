@@ -48,6 +48,7 @@ public class DBRecord implements Writable, DBWritable {
   private StructuredRecord record;
 
   public void readFields(DataInput in) throws IOException {
+    // no-op, since we may never need to support a scenario where you read a DBRecord from a non-RDBMS source
   }
 
   /**
@@ -69,7 +70,11 @@ public class DBRecord implements Writable, DBWritable {
     for (int i = 1; i <= metadata.getColumnCount(); i++) {
       String columnName = metadata.getColumnName(i);
       int columnSqlType = metadata.getColumnType(i);
-      Schema.Field field = Schema.Field.of(columnName, Schema.of(getType(columnSqlType)));
+      Schema columnSchema = Schema.of(getType(columnSqlType));
+      if (ResultSetMetaData.columnNullable == metadata.isNullable(i)) {
+        columnSchema = Schema.nullableOf(Schema.of(getType(columnSqlType)));
+      }
+      Schema.Field field = Schema.Field.of(columnName, columnSchema);
       fields.add(field);
     }
     Schema schema = Schema.recordOf("dbRecord", fields);
@@ -81,6 +86,16 @@ public class DBRecord implements Writable, DBWritable {
   }
 
   public void write(DataOutput out) throws IOException {
+    Schema recordSchema = record.getSchema();
+    List<Schema.Field> schemaFields = recordSchema.getFields();
+    for (int i = 0; i < schemaFields.size(); i++) {
+      Schema.Field field = schemaFields.get(i);
+      String fieldName = field.getName();
+      Schema.Type fieldType = field.getSchema().getType();
+      Object fieldValue = record.get(fieldName);
+      // In JDBC, field indices start with 1
+      writeToDataOut(out, fieldType, fieldValue);
+    }
   }
 
   /**
@@ -92,13 +107,12 @@ public class DBRecord implements Writable, DBWritable {
     Schema recordSchema = record.getSchema();
     List<Schema.Field> schemaFields = recordSchema.getFields();
     for (int i = 0; i < schemaFields.size(); i++) {
-      // In JDBC, field indices start with 1
-      int jdbcFieldIndex = i + 1;
       Schema.Field field = schemaFields.get(i);
       String fieldName = field.getName();
       Schema.Type fieldType = field.getSchema().getType();
       Object fieldValue = record.get(fieldName);
-      writeValue(stmt, fieldType, fieldValue, jdbcFieldIndex);
+      // In JDBC, field indices start with 1
+      writeToDB(stmt, fieldType, fieldValue, i + 1);
     }
   }
 
@@ -164,8 +178,42 @@ public class DBRecord implements Writable, DBWritable {
     return type;
   }
 
-  private void writeValue(PreparedStatement stmt, Schema.Type fieldType, Object fieldValue,
-                          int fieldIndex) throws SQLException {
+  private void writeToDataOut(DataOutput out, Schema.Type fieldType, Object fieldValue) throws IOException {
+    switch (fieldType) {
+      case NULL:
+        break;
+      case STRING:
+        // write string appropriately
+        out.writeUTF((String) fieldValue);
+        break;
+      case BOOLEAN:
+        out.writeBoolean((Boolean) fieldValue);
+        break;
+      case INT:
+        // write short or int appropriately
+        out.writeInt((Integer) fieldValue);
+        break;
+      case LONG:
+        // write date, timestamp or long appropriately
+        out.writeLong((Long) fieldValue);
+        break;
+      case FLOAT:
+        // both real and float are set with the same method on prepared statement
+        out.writeFloat((Float) fieldValue);
+        break;
+      case DOUBLE:
+        out.writeDouble((Double) fieldValue);
+        break;
+      case BYTES:
+        out.write((byte[]) fieldValue);
+        break;
+      default:
+        throw new IOException(String.format("Unsupported datatype: %s with value: %s.", fieldType, fieldValue));
+    }
+  }
+
+  private void writeToDB(PreparedStatement stmt, Schema.Type fieldType, Object fieldValue,
+                         int fieldIndex) throws SQLException {
     switch (fieldType) {
       case NULL:
         stmt.setNull(fieldIndex, fieldIndex);
