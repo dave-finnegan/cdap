@@ -233,17 +233,18 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       if (!appSpec.getMapReduce().containsKey(mapreduceId)) {
         throw new NotFoundException(programId);
       }
-      if (store.getRun(programId, runId) == null) {
+      RunRecord runRecord = store.getRun(programId, runId);
+      if (runRecord == null) {
         throw new NotFoundException(run);
       }
 
 
       MRJobInfo mrJobInfo;
       try {
-        mrJobInfo = mrJobClient.getMRJobInfo(run);
+        mrJobInfo = mrJobClient.getMRJobInfo(run, runRecord);
       } catch (IOException ioe) {
         LOG.warn("Failed to get run history from JobClient for runId: {}. Falling back to Metrics system.", run, ioe);
-        mrJobInfo = mapReduceMetricsInfo.getMRJobInfo(run);
+        mrJobInfo = mapReduceMetricsInfo.getMRJobInfo(run, runRecord);
       }
 
 
