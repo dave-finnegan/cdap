@@ -128,47 +128,29 @@ public class ETLDBMapreduceTest extends TestBase {
     PreparedStatement pStmt1 =
       conn.prepareStatement("INSERT INTO my_table VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
-      pStmt1.setInt(1, 1);
-      pStmt1.setString(2, "bob");
-      pStmt1.setDouble(3, 3.3);
-      pStmt1.setBoolean(4, false);
-      pStmt1.setString(5, "random");
-      pStmt1.setShort(6, (short) 1);
-      pStmt1.setShort(7, (short) 2);
-      pStmt1.setLong(8, 8L);
-      pStmt1.setFloat(9, 9f);
-      pStmt1.setFloat(10, 4f);
-      pStmt1.setDouble(11, 9);
-      pStmt1.setDouble(12, 8);
-      pStmt1.setInt(13, 1);
-      pStmt1.setDate(14, new Date(currentTs));
-      pStmt1.setTime(15, new Time(currentTs));
-      pStmt1.setTimestamp(16, new Timestamp(currentTs));
-      pStmt1.setBytes(17, "bob".getBytes(Charsets.UTF_8));
-      pStmt1.setBlob(18, new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8)));
-      pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("bob".getBytes(Charsets.UTF_8))));
-      pStmt1.executeUpdate();
-
-      pStmt1.setInt(1, 2);
-      pStmt1.setString(2, "alice");
-      pStmt1.setDouble(3, 3.9);
-      pStmt1.setBoolean(4, true);
-      pStmt1.setString(5, "random");
-      pStmt1.setShort(6, (short) 3);
-      pStmt1.setShort(7, (short) 4);
-      pStmt1.setLong(8, 0L);
-      pStmt1.setFloat(9, 8f);
-      pStmt1.setFloat(10, 4f);
-      pStmt1.setDouble(11, 12);
-      pStmt1.setDouble(12, 8);
-      pStmt1.setBoolean(13, false);
-      pStmt1.setDate(14, new Date(currentTs));
-      pStmt1.setTime(15, new Time(currentTs));
-      pStmt1.setTimestamp(16, new Timestamp(currentTs));
-      pStmt1.setBytes(17, "alice".getBytes(Charsets.UTF_8));
-      pStmt1.setBlob(18, new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8)));
-      pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream("alice".getBytes(Charsets.UTF_8))));
-      pStmt1.executeUpdate();
+      for (int i = 1; i <= 3; i++) {
+        String name = "user" + i;
+        pStmt1.setInt(1, i);
+        pStmt1.setString(2, name);
+        pStmt1.setDouble(3, i);
+        pStmt1.setBoolean(4, (i % 2 == 0));
+        pStmt1.setString(5, "random" + i);
+        pStmt1.setShort(6, (short) i);
+        pStmt1.setShort(7, (short) i);
+        pStmt1.setLong(8, (long) i);
+        pStmt1.setFloat(9, (float) i);
+        pStmt1.setFloat(10, (float) i);
+        pStmt1.setDouble(11, i);
+        pStmt1.setDouble(12, i);
+        pStmt1.setBoolean(13, (i % 2 == 1));
+        pStmt1.setDate(14, new Date(currentTs));
+        pStmt1.setTime(15, new Time(currentTs));
+        pStmt1.setTimestamp(16, new Timestamp(currentTs));
+        pStmt1.setBytes(17, name.getBytes(Charsets.UTF_8));
+        pStmt1.setBlob(18, new ByteArrayInputStream(name.getBytes(Charsets.UTF_8)));
+        pStmt1.setClob(19, new InputStreamReader(new ByteArrayInputStream(name.getBytes(Charsets.UTF_8))));
+        pStmt1.executeUpdate();
+      }
     } finally {
       pStmt1.close();
     }
@@ -185,13 +167,16 @@ public class ETLDBMapreduceTest extends TestBase {
     ApplicationManager applicationManager = deployApplication(ETLBatchTemplate.class, hsqldbJar);
 
     ApplicationTemplate<ETLBatchConfig> appTemplate = new ETLBatchTemplate();
+
+    String importQuery = "SELECT id, name, score, graduated, tiny, small, big, float, real, numeric, decimal, bit, " +
+      "binary, date, time, timestamp FROM my_table WHERE id < 3";
+    String countQuery = "SELECT COUNT(id) from my_table WHERE id < 3";
     ETLStage source = new ETLStage(DBSource.class.getSimpleName(),
                                    ImmutableMap.of(Properties.DB.DRIVER_CLASS, hsqlDBServer.getHsqlDBDriver(),
                                                    Properties.DB.CONNECTION_STRING, hsqlDBServer.getConnectionUrl(),
                                                    Properties.DB.TABLE_NAME, "my_table",
-                                                   Properties.DB.COLUMNS,
-                                                   "id, name, score, graduated, tiny, small, big, float, real, " +
-                                                     "numeric, decimal, bit, binary, date, time, timestamp"
+                                                   Properties.DB.IMPORT_QUERY, importQuery,
+                                                   Properties.DB.COUNT_QUERY, countQuery
                                    ));
     ETLStage sink = new ETLStage("KVTableSink", ImmutableMap.of("name", "table1"));
     ETLStage structuredRecordTransform = new ETLStage(DBRecordToStructuredRecordTransform.class.getSimpleName(),
@@ -222,28 +207,28 @@ public class ETLDBMapreduceTest extends TestBase {
     // GSON deserializes integer as Double
     Assert.assertEquals(1.0, firstRecord.get("ID"));
     Assert.assertEquals(2.0, secondRecord.get("ID"));
-    Assert.assertEquals("bob", firstRecord.get("NAME"));
-    Assert.assertEquals("alice", secondRecord.get("NAME"));
-    Assert.assertEquals(3.3, firstRecord.get("SCORE"));
-    Assert.assertEquals(3.9, secondRecord.get("SCORE"));
+    Assert.assertEquals("user1", firstRecord.get("NAME"));
+    Assert.assertEquals("user2", secondRecord.get("NAME"));
+    Assert.assertEquals(1.0, firstRecord.get("SCORE"));
+    Assert.assertEquals(2.0, secondRecord.get("SCORE"));
     Assert.assertEquals(false, firstRecord.get("GRADUATED"));
     Assert.assertEquals(true, secondRecord.get("GRADUATED"));
     Assert.assertFalse(firstRecord.containsKey("NOT_IMPORTED"));
     Assert.assertFalse(secondRecord.containsKey("NOT_IMPORTED"));
     Assert.assertEquals(1.0, firstRecord.get("TINY"));
-    Assert.assertEquals(3.0, secondRecord.get("TINY"));
-    Assert.assertEquals(2.0, firstRecord.get("SMALL"));
-    Assert.assertEquals(4.0, secondRecord.get("SMALL"));
-    Assert.assertEquals(8.0, firstRecord.get("BIG"));
-    Assert.assertEquals(0.0, secondRecord.get("BIG"));
-    Assert.assertEquals(9.0, firstRecord.get("FLOAT"));
-    Assert.assertEquals(8.0, secondRecord.get("FLOAT"));
-    Assert.assertEquals(4.0, firstRecord.get("REAL"));
-    Assert.assertEquals(4.0, secondRecord.get("REAL"));
-    Assert.assertEquals(9.0, firstRecord.get("NUMERIC"));
-    Assert.assertEquals(12.0, secondRecord.get("NUMERIC"));
-    Assert.assertEquals(8.0, firstRecord.get("DECIMAL"));
-    Assert.assertEquals(8.0, secondRecord.get("DECIMAL"));
+    Assert.assertEquals(2.0, secondRecord.get("TINY"));
+    Assert.assertEquals(1.0, firstRecord.get("SMALL"));
+    Assert.assertEquals(2.0, secondRecord.get("SMALL"));
+    Assert.assertEquals(1.0, firstRecord.get("BIG"));
+    Assert.assertEquals(2.0, secondRecord.get("BIG"));
+    Assert.assertEquals(1.0, firstRecord.get("FLOAT"));
+    Assert.assertEquals(2.0, secondRecord.get("FLOAT"));
+    Assert.assertEquals(1.0, firstRecord.get("REAL"));
+    Assert.assertEquals(2.0, secondRecord.get("REAL"));
+    Assert.assertEquals(1.0, firstRecord.get("NUMERIC"));
+    Assert.assertEquals(2.0, secondRecord.get("NUMERIC"));
+    Assert.assertEquals(1.0, firstRecord.get("DECIMAL"));
+    Assert.assertEquals(2.0, secondRecord.get("DECIMAL"));
     Assert.assertEquals(true, firstRecord.get("BIT"));
     Assert.assertEquals(false, secondRecord.get("BIT"));
     Assert.assertTrue(firstRecord.containsKey("BINARY"));

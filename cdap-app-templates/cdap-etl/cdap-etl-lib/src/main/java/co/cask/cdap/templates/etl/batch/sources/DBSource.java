@@ -53,8 +53,20 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
       new Property(Properties.DB.CONNECTION_STRING, "JDBC connection string including database name", true));
     configurer.addProperty(new Property(Properties.DB.TABLE_NAME, "Table name to import", true));
     configurer.addProperty(
-      new Property(Properties.DB.COLUMNS,
-                   "Comma-separated list of columns to import. When unspecified, defaults to all columns.", false));
+      new Property(Properties.DB.IMPORT_QUERY,
+                   "The SELECT query to use to import data from the specified table. " +
+                     "You can specify an arbitrary number of columns to import, or import all columns using *. " +
+                     "You can also specify a number of WHERE clauses or ORDER BY clauses. " +
+                     "However, LIMIT and OFFSET clauses should not be used in this query.",
+                   true));
+    configurer.addProperty(
+      new Property(Properties.DB.COUNT_QUERY,
+                   "The SELECT query to use to get the count of records to import from the specified table. " +
+                     "Examples: SELECT COUNT(*) from <my_table> where <my_column> 1, " +
+                     "SELECT COUNT(my_column) from my_table). " +
+                     "NOTE: Please include the same WHERE clauses in this query as the ones used in the " +
+                     "import query to reflect an accurate number of records to import.",
+                   true));
   }
 
   @Override
@@ -63,9 +75,13 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     String dbDriverClass = properties.get(Properties.DB.DRIVER_CLASS);
     String dbConnectionString = properties.get(Properties.DB.CONNECTION_STRING);
     String dbTableName = properties.get(Properties.DB.TABLE_NAME);
+    String dbImportQuery = properties.get(Properties.DB.IMPORT_QUERY);
+    String dbCountQuery = properties.get(Properties.DB.COUNT_QUERY);
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbDriverClass), "dbDriverClass cannot be null");
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbConnectionString), "dbConnectionString cannot be null");
     Preconditions.checkArgument(!Strings.isNullOrEmpty(dbTableName), "dbTableName cannot be null");
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(dbImportQuery), "dbImportQuery cannot be null");
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(dbCountQuery), "dbCountQuery cannot be null");
   }
 
   @Override
@@ -74,25 +90,17 @@ public class DBSource extends BatchSource<LongWritable, DBRecord> {
     String dbDriverClass = runtimeArguments.get(Properties.DB.DRIVER_CLASS);
     String dbConnectionString = runtimeArguments.get(Properties.DB.CONNECTION_STRING);
     String dbTableName = runtimeArguments.get(Properties.DB.TABLE_NAME);
-    String dbColumns = runtimeArguments.get(Properties.DB.COLUMNS);
+    String dbImportQuery = runtimeArguments.get(Properties.DB.IMPORT_QUERY);
+    String dbCountQuery = runtimeArguments.get(Properties.DB.COUNT_QUERY);
 
-    LOG.debug("dbTableName = {}; dbDriverClass = {}; dbConnectionString = {}; dbColumns = {}",
-              dbTableName, dbDriverClass, dbConnectionString, dbColumns);
-
-    String countQueryColumn;
-    if (dbColumns == null) {
-      dbColumns = "*";
-      countQueryColumn = "*";
-    } else {
-      countQueryColumn = dbColumns.substring(0, dbColumns.indexOf(","));
-    }
+    LOG.debug("dbTableName = {}; dbDriverClass = {}; dbConnectionString = {}; dbImportQuery = {}; dbCountQuery = {}",
+              dbTableName, dbDriverClass, dbConnectionString, dbImportQuery, dbCountQuery);
 
     Job job = context.getHadoopJob();
     Configuration conf = job.getConfiguration();
     job.setInputFormatClass(ETLDBInputFormat.class);
     DBConfiguration.configureDB(conf, dbDriverClass, dbConnectionString);
-    ETLDBInputFormat.setInput(job, DBRecord.class, String.format("SELECT %s FROM %s", dbColumns, dbTableName),
-                              String.format("SELECT COUNT(%s) from %s", countQueryColumn, dbTableName));
+    ETLDBInputFormat.setInput(job, DBRecord.class, dbImportQuery, dbCountQuery);
     job.setInputFormatClass(ETLDBInputFormat.class);
   }
 }

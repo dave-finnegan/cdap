@@ -29,6 +29,8 @@ public final class Properties {
     public static final String CONNECTION_STRING = "dbConnectionString";
     public static final String TABLE_NAME = "dbTableName";
     public static final String COLUMNS = "dbColumns";
+    public static final String IMPORT_QUERY = "dbImportQuery";
+    public static final String COUNT_QUERY = "dbCountQuery";
   }
 
   private Properties() {
