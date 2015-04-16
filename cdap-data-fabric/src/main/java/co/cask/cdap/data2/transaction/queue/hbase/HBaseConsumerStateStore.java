@@ -79,6 +79,13 @@ final class HBaseConsumerStateStore extends AbstractDataset implements QueueConf
   }
 
   /**
+   * Returns the internal dataset table. Only for QueueAdmin to use.
+   */
+  Table getInternalTable() {
+    return table;
+  }
+
+  /**
    * Returns the consumer state as stored in the state store for the given consumer.
    */
   HBaseConsumerState getState(long groupId, int instanceId) {
